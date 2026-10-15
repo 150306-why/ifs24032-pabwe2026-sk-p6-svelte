@@ -21,7 +21,7 @@
       ]}
     >
       <item.icon size={18} />
-      {item.label}
+      <span>{item.label}</span>
     </a>
   {/each}
 </nav>

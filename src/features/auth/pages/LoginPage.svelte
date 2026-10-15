@@ -23,9 +23,10 @@
 <h2 class="text-xl font-semibold mb-4">Masuk</h2>
 <form onsubmit={submit} class="space-y-4">
   <div>
-    <label for="login-email" class="block text-sm font-medium mb-1">Email</label>
+    <label for="login-email-input" class="block text-sm font-medium mb-1">Email</label>
     <input
-      id="login-email"
+      id="login-email-input"
+      autocomplete="username"
       type="email"
       required
       bind:value={$email}
@@ -33,9 +34,10 @@
     />
   </div>
   <div>
-    <label for="login-password" class="block text-sm font-medium mb-1">Kata Sandi</label>
+    <label for="login-password-input" class="block text-sm font-medium mb-1">Kata Sandi</label>
     <input
-      id="login-password"
+      id="login-password-input"
+      autocomplete="current-password"
       type="password"
       required
       bind:value={$password}
@@ -43,6 +45,7 @@
     />
   </div>
   <button
+    id="login-submit-button"
     type="submit"
     disabled={loading}
     class="w-full rounded-lg bg-indigo-600 py-2 font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"

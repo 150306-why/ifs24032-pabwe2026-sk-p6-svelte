@@ -17,6 +17,9 @@ vi.mock("../../../helpers/apiHelper.js", () => ({
 vi.mock("../api/authApi.js", () => ({ login: vi.fn(), register: vi.fn() }));
 vi.mock("../../users/api/userApi.js", () => ({ getMe: vi.fn() }));
 
+// Dicatat saat modul dimuat, sebelum vi.clearAllMocks() menghapus riwayat panggilan.
+const getAccessTokenCallsAtLoad = getAccessToken.mock.calls.length;
+
 beforeEach(() => {
   vi.clearAllMocks();
   token.set(null);
@@ -26,7 +29,7 @@ beforeEach(() => {
 
 describe("authStore", () => {
   it("token awal diambil dari helper", () => {
-    expect(getAccessToken).toHaveBeenCalled();
+    expect(getAccessTokenCallsAtLoad).toBeGreaterThan(0);
   });
 
   it("initAuth tanpa token hanya menandai siap", async () => {

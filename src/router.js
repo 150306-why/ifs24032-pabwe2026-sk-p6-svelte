@@ -1,9 +1,9 @@
 import { writable } from "svelte/store";
 
-export const currentPath = writable(window.location.pathname);
+export const currentPath = writable(globalThis.location.pathname);
 
 export function navigate(path, { replace = false } = {}) {
-  window.history[replace ? "replaceState" : "pushState"]({}, "", path);
+  globalThis.history[replace ? "replaceState" : "pushState"]({}, "", path);
   currentPath.set(path);
 }
 
@@ -12,7 +12,7 @@ export function link(event) {
   navigate(event.currentTarget.getAttribute("href"));
 }
 
-window.addEventListener("popstate", () => currentPath.set(window.location.pathname));
+globalThis.addEventListener("popstate", () => currentPath.set(globalThis.location.pathname));
 
 const NOT_FOUND = { layout: "none", page: "notfound", params: {} };
 

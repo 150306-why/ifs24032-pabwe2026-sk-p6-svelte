@@ -1,50 +1,40 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
-import { currentPath, go, initRouter, navigate, resolveRoute } from "./router.js";
-
-beforeEach(() => {
-  window.history.pushState({}, "", "/");
-  currentPath.set("/");
-});
+import { currentPath, navigate, link, resolveRoute } from "./router.js";
 
 describe("router", () => {
-  it("navigate mengubah URL dan store", () => {
-    navigate("/users");
-    expect(window.location.pathname).toBe("/users");
-    expect(get(currentPath)).toBe("/users");
-  });
-
-  it("go mencegah aksi bawaan lalu berpindah", () => {
-    const event = { preventDefault: vi.fn() };
-    go(event, "/profile");
-    expect(event.preventDefault).toHaveBeenCalled();
-    expect(get(currentPath)).toBe("/profile");
-  });
-
-  it("initRouter menyinkronkan path dan mendengarkan popstate", () => {
-    window.history.pushState({}, "", "/users");
-    const stop = initRouter();
-    expect(get(currentPath)).toBe("/users");
-    window.history.pushState({}, "", "/profile");
-    window.dispatchEvent(new PopStateEvent("popstate"));
-    expect(get(currentPath)).toBe("/profile");
-    stop();
-    window.history.pushState({}, "", "/");
-    window.dispatchEvent(new PopStateEvent("popstate"));
-    expect(get(currentPath)).toBe("/profile");
-  });
-
   it("resolveRoute memetakan semua rute", () => {
     expect(resolveRoute("/auth/login")).toEqual({ layout: "auth", page: "login", params: {} });
     expect(resolveRoute("/auth/register").page).toBe("register");
-    expect(resolveRoute("/").page).toBe("home");
+    expect(resolveRoute("/")).toEqual({ layout: "app", page: "home", params: {} });
     expect(resolveRoute("/users").page).toBe("users");
     expect(resolveRoute("/profile").page).toBe("profile");
-    expect(resolveRoute("/link-trees/7")).toEqual({
+    expect(resolveRoute("/link-trees/abc")).toEqual({
       layout: "app",
       page: "detail",
-      params: { linkTreeId: "7" },
+      params: { linkTreeId: "abc" },
     });
-    expect(resolveRoute("/tidak-ada")).toEqual({ layout: "app", page: "notfound", params: {} });
+    expect(resolveRoute("/link-trees/abc/x").page).toBe("notfound");
+    expect(resolveRoute("/tidak-ada").page).toBe("notfound");
+  });
+
+  it("navigate memakai pushState atau replaceState", () => {
+    navigate("/users");
+    expect(window.location.pathname).toBe("/users");
+    expect(get(currentPath)).toBe("/users");
+    navigate("/profile", { replace: true });
+    expect(window.location.pathname).toBe("/profile");
+  });
+
+  it("link mencegah navigasi bawaan", () => {
+    const preventDefault = vi.fn();
+    link({ preventDefault, currentTarget: { getAttribute: () => "/users" } });
+    expect(preventDefault).toHaveBeenCalled();
+    expect(get(currentPath)).toBe("/users");
+  });
+
+  it("popstate memperbarui currentPath", () => {
+    window.history.pushState({}, "", "/profile");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(get(currentPath)).toBe("/profile");
   });
 });

@@ -1,21 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
-import { apiRequest } from "../../../helpers/apiHelper.js";
-import { login, register } from "./authApi.js";
-
-vi.mock("../../../helpers/apiHelper.js", () => ({ apiRequest: vi.fn() }));
+import { postLogin, postRegister } from "./authApi.js";
+import { mockApi, okResponse } from "../../../test-utils.js";
 
 describe("authApi", () => {
-  it("login memanggil POST /auth/login", () => {
-    login("a@b.c", "pw");
-    expect(apiRequest).toHaveBeenCalledWith("POST", "/auth/login", {
-      json: { email: "a@b.c", password: "pw" },
+  it("login dan register memakai POST", async () => {
+    const fetchMock = mockApi({
+      "POST /auth/login": okResponse({ token: "t" }),
+      "POST /auth/register": okResponse(),
     });
-  });
-
-  it("register memanggil POST /auth/register", () => {
-    register("Budi", "a@b.c", "pw");
-    expect(apiRequest).toHaveBeenCalledWith("POST", "/auth/register", {
-      json: { name: "Budi", email: "a@b.c", password: "pw" },
-    });
+    expect((await postLogin({ email: "a", password: "b" })).data.token).toBe("t");
+    expect((await postRegister({ name: "n", email: "a", password: "b" })).status).toBe("success");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

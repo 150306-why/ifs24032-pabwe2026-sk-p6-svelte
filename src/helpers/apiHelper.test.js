@@ -1,20 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  apiRequest,
   getAccessToken,
   putAccessToken,
   removeAccessToken,
+  request,
+  isSuccess,
 } from "./apiHelper.js";
+import { mockApi, okResponse } from "../test-utils.js";
 
-const reply = (body) =>
-  vi.fn().mockResolvedValue({ json: () => Promise.resolve(body) });
+describe("apiHelper", () => {
+  beforeEach(() => localStorage.clear());
 
-beforeEach(() => {
-  localStorage.clear();
-  vi.unstubAllGlobals();
-});
-
-describe("token", () => {
   it("menyimpan, membaca, dan menghapus token", () => {
     expect(getAccessToken()).toBeNull();
     putAccessToken("abc");
@@ -22,47 +17,42 @@ describe("token", () => {
     removeAccessToken();
     expect(getAccessToken()).toBeNull();
   });
-});
 
-describe("apiRequest", () => {
-  it("GET tanpa token dan tanpa body", async () => {
-    const fetchMock = reply({ status: "success", data: { a: 1 } });
-    vi.stubGlobal("fetch", fetchMock);
-    const result = await apiRequest("GET", "/x", {});
-    expect(result.data.a).toBe(1);
-    expect(fetchMock).toHaveBeenCalledWith(`${DELCOM_BASEURL}/x`, {
-      method: "GET",
-      headers: {},
-    });
-  });
-
-  it("mengirim body JSON dengan token", async () => {
+  it("mengirim JSON beserta header Authorization", async () => {
     putAccessToken("tok");
-    const fetchMock = reply({ status: "success" });
-    vi.stubGlobal("fetch", fetchMock);
-    await apiRequest("POST", "/y", { json: { k: "v" } });
-    expect(fetchMock).toHaveBeenCalledWith(`${DELCOM_BASEURL}/y`, {
-      method: "POST",
-      headers: { Authorization: "Bearer tok", "Content-Type": "application/json" },
-      body: JSON.stringify({ k: "v" }),
-    });
+    const fetchMock = mockApi({ "POST /x": okResponse({ a: 1 }) });
+    const res = await request("/x", { method: "POST", body: { a: 1 } });
+    expect(res.status).toBe("success");
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toContain("/x");
+    expect(options.headers.Authorization).toBe("Bearer tok");
+    expect(options.headers["Content-Type"]).toBe("application/json");
+    expect(options.body).toBe('{"a":1}');
   });
 
-  it("mengirim FormData", async () => {
-    const fetchMock = reply({ status: "success" });
-    vi.stubGlobal("fetch", fetchMock);
+  it("mengirim FormData tanpa Content-Type dan tanpa token", async () => {
+    const fetchMock = mockApi({ "POST /up": okResponse() });
     const form = new FormData();
-    await apiRequest("POST", "/z", { form });
-    expect(fetchMock.mock.calls[0][1].body).toBe(form);
+    await request("/up", { method: "POST", form });
+    const options = fetchMock.mock.calls[0][1];
+    expect(options.body).toBe(form);
+    expect(options.headers).toEqual({});
   });
 
-  it("menerima success: true", async () => {
-    vi.stubGlobal("fetch", reply({ success: true }));
-    await expect(apiRequest("GET", "/x", {})).resolves.toEqual({ success: true });
+  it("GET tanpa body", async () => {
+    const fetchMock = mockApi({ "GET /y": okResponse() });
+    await request("/y");
+    expect(fetchMock.mock.calls[0][1].body).toBeUndefined();
   });
 
-  it("melempar error bila respons gagal", async () => {
-    vi.stubGlobal("fetch", reply({ status: "fail", message: "Gagal total" }));
-    await expect(apiRequest("GET", "/x", {})).rejects.toThrow("Gagal total");
+  it("mengembalikan galat bila jaringan gagal", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("offline"));
+    const res = await request("/z");
+    expect(res.status).toBe("error");
+    expect(isSuccess(res)).toBe(false);
+  });
+
+  it("isSuccess", () => {
+    expect(isSuccess({ status: "success" })).toBe(true);
   });
 });

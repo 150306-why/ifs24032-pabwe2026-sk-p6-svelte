@@ -1,16 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { fireEvent, screen } from "@testing-library/svelte";
 import { get } from "svelte/store";
-import { renderWithProviders } from "../../../test-utils.js";
-import { currentPath } from "../../../router.js";
+import { screen, fireEvent } from "@testing-library/svelte";
 import NotFoundPage from "./NotFoundPage.svelte";
+import { currentPath } from "../../../router.js";
+import { renderWithProviders } from "../../../test-utils.js";
 
 describe("NotFoundPage", () => {
-  it("menampilkan pesan dan tautan beranda", async () => {
-    currentPath.set("/entah");
+  it("menampilkan 404 dan kembali ke beranda", async () => {
     renderWithProviders(NotFoundPage);
-    expect(screen.getByText("404")).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("link", { name: "Kembali ke Beranda" }));
+    expect(screen.getByText("Halaman tidak ditemukan")).toBeInTheDocument();
+    currentPath.set("/xyz");
+    await fireEvent.click(screen.getByText("Kembali ke beranda"));
     expect(get(currentPath)).toBe("/");
   });
 });

@@ -1,12 +1,9 @@
 import { writable } from "svelte/store";
 
-/** Store input formulir: bisa dipakai dengan bind:value={$input}. */
-export function useInput(initial) {
-  const { subscribe, set, update } = writable(initial);
-  return {
-    subscribe,
-    set,
-    update,
-    reset: () => set(initial),
-  };
+/** Hook input formulir berbasis Svelte store. */
+export function useInput(initialValue = "") {
+  const value = writable(initialValue);
+  const onChange = (event) => value.set(event.target.value);
+  const reset = () => value.set(initialValue);
+  return { value, onChange, reset };
 }

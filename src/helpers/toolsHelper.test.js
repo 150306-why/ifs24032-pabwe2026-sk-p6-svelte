@@ -1,49 +1,44 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import Swal from "sweetalert2";
 import {
-  attempt,
-  formatDate,
-  showConfirmDialog,
-  showErrorDialog,
   showSuccessDialog,
+  showErrorDialog,
   showWarningDialog,
+  showConfirmDialog,
+  handleResult,
+  formatDate,
+  cn,
 } from "./toolsHelper.js";
 
-vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
 describe("toolsHelper", () => {
-  it("menampilkan dialog sukses, error, dan peringatan", () => {
-    showSuccessDialog("ok");
-    showErrorDialog("err");
-    showWarningDialog("warn");
-    expect(Swal.fire).toHaveBeenNthCalledWith(1, { icon: "success", title: "Berhasil", text: "ok" });
-    expect(Swal.fire).toHaveBeenNthCalledWith(2, { icon: "error", title: "Gagal", text: "err" });
-    expect(Swal.fire).toHaveBeenNthCalledWith(3, { icon: "warning", title: "Perhatian", text: "warn" });
+  beforeEach(() => vi.clearAllMocks());
+
+  it("menampilkan dialog sukses, galat, dan peringatan", async () => {
+    await showSuccessDialog("a");
+    await showErrorDialog("b");
+    await showWarningDialog("c");
+    expect(Swal.fire.mock.calls.map((c) => c[0].icon)).toEqual(["success", "error", "warning"]);
   });
 
   it("dialog konfirmasi mengembalikan pilihan pengguna", async () => {
-    Swal.fire.mockResolvedValueOnce({ isConfirmed: true });
     expect(await showConfirmDialog("yakin?")).toBe(true);
     Swal.fire.mockResolvedValueOnce({ isConfirmed: false });
     expect(await showConfirmDialog("yakin?")).toBe(false);
   });
 
-  it("memformat tanggal", () => {
-    expect(formatDate("2026-10-15")).toContain("2026");
+  it("handleResult menjalankan callback hanya saat sukses", async () => {
+    const onSuccess = vi.fn();
+    expect(await handleResult({ status: "success", message: "ok" }, onSuccess)).toBe(true);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(await handleResult({ status: "fail", message: "gagal" }, onSuccess)).toBe(false);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(Swal.fire.mock.calls[1][0].icon).toBe("error");
   });
 
-  it("attempt mengembalikan true bila sukses", async () => {
-    const action = vi.fn().mockResolvedValue();
-    expect(await attempt(action)).toBe(true);
-    expect(Swal.fire).not.toHaveBeenCalled();
+  it("memformat tanggal Indonesia", () => {
+    expect(formatDate("2026-01-15T00:00:00Z")).toMatch(/2026/);
   });
 
-  it("attempt menampilkan error dan mengembalikan false bila gagal", async () => {
-    expect(await attempt(() => Promise.reject(new Error("boom")))).toBe(false);
-    expect(Swal.fire).toHaveBeenCalledWith({ icon: "error", title: "Gagal", text: "boom" });
+  it("cn menggabungkan kelas Tailwind", () => {
+    expect(cn("px-2", false, "px-4")).toBe("px-4");
   });
 });

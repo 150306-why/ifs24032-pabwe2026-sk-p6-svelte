@@ -1,48 +1,47 @@
 import { writable } from "svelte/store";
-import {
-  getMe,
-  getUsers,
-  updatePassword,
-  updatePhoto,
-  updateProfile,
-} from "../api/userApi.js";
-import { profile } from "../../auth/states/authStore.js";
-import { attempt, showSuccessDialog } from "../../../helpers/toolsHelper.js";
+import * as api from "../api/usersApi.js";
+import { isSuccess } from "../../../helpers/apiHelper.js";
 
 export const users = writable([]);
+export const profile = writable(null);
+export const isProfileUpdated = writable(false);
+export const isPhotoUpdated = writable(false);
+export const isPasswordChanged = writable(false);
 
-async function notify(ok, message) {
-  if (ok) {
-    await showSuccessDialog(message);
+export async function loadUsers() {
+  const res = await api.getUsers();
+  users.set(isSuccess(res) ? res.data.users : []);
+  return res;
+}
+
+export async function loadProfile() {
+  const res = await api.getMe();
+  profile.set(isSuccess(res) ? res.data.user : null);
+  return res;
+}
+
+async function mutate(call, flag) {
+  const res = await call();
+  if (isSuccess(res)) {
+    flag.set(true);
+    await loadProfile();
   }
-  return ok;
+  return res;
 }
 
-export async function fetchUsers() {
-  await attempt(async () => {
-    const result = await getUsers();
-    users.set(result.data.users);
-  });
+export const updateProfile = (data) => mutate(() => api.putMe(data), isProfileUpdated);
+export const updatePhoto = (file) => mutate(() => api.postPhoto(file), isPhotoUpdated);
+
+export async function changePassword(data) {
+  const res = await api.putPassword(data);
+  if (isSuccess(res)) isPasswordChanged.set(true);
+  return res;
 }
 
-export async function saveProfile(name, email) {
-  const ok = await attempt(async () => {
-    await updateProfile(name, email);
-    profile.update((current) => ({ ...current, name, email }));
-  });
-  return notify(ok, "Profil berhasil diubah");
-}
-
-export async function savePhoto(file) {
-  const ok = await attempt(async () => {
-    await updatePhoto(file);
-    const me = await getMe();
-    profile.set(me.data.user);
-  });
-  return notify(ok, "Foto profil berhasil diubah");
-}
-
-export async function savePassword(password, newPassword) {
-  const ok = await attempt(() => updatePassword(password, newPassword));
-  return notify(ok, "Kata sandi berhasil diubah");
+export function resetUsers() {
+  users.set([]);
+  profile.set(null);
+  isProfileUpdated.set(false);
+  isPhotoUpdated.set(false);
+  isPasswordChanged.set(false);
 }

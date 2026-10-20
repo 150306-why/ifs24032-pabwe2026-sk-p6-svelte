@@ -1,112 +1,81 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
-import Swal from "sweetalert2";
-import * as api from "../api/linkTreeApi.js";
 import * as store from "./linkTreesStore.js";
+import { mockApi, okResponse, failResponse, resetAllStores, sampleTree } from "../../../test-utils.js";
 
-vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
-vi.mock("../api/linkTreeApi.js", () => ({
-  getLinkTrees: vi.fn(),
-  getLinkTree: vi.fn(),
-  addLinkTree: vi.fn(),
-  changeLinkTree: vi.fn(),
-  changeCover: vi.fn(),
-  deleteLinkTree: vi.fn(),
-  deleteAllLinkTrees: vi.fn(),
-  addItem: vi.fn(),
-  changeItem: vi.fn(),
-  deleteItem: vi.fn(),
-}));
+const listRoutes = {
+  "GET /link-trees": okResponse({ link_trees: [sampleTree] }),
+  "GET /link-trees/t1": okResponse({ link_tree: sampleTree }),
+};
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  store.resetFlags();
-  store.linkTrees.set([]);
-  store.linkTree.set(null);
-});
+describe("linkTreesStore", () => {
+  beforeEach(resetAllStores);
 
-describe("fetch", () => {
-  it("fetchLinkTrees mengisi koleksi", async () => {
-    api.getLinkTrees.mockResolvedValue({ data: { link_trees: [{ id: 1 }] } });
-    await store.fetchLinkTrees();
-    expect(get(store.linkTrees)).toEqual([{ id: 1 }]);
-    expect(get(store.loading)).toBe(false);
+  it("loadLinkTrees sukses dan gagal", async () => {
+    mockApi(listRoutes);
+    await store.loadLinkTrees();
+    expect(get(store.linkTrees)).toEqual([sampleTree]);
+    mockApi({ "GET /link-trees": failResponse() });
+    await store.loadLinkTrees();
+    expect(get(store.linkTrees)).toEqual([]);
   });
 
-  it("fetchLinkTrees gagal menampilkan error", async () => {
-    api.getLinkTrees.mockRejectedValue(new Error("down"));
-    await store.fetchLinkTrees();
-    expect(Swal.fire).toHaveBeenCalledWith(expect.objectContaining({ icon: "error", text: "down" }));
-    expect(get(store.loading)).toBe(false);
-  });
-
-  it("fetchLinkTree memakai items di dalam link_tree", async () => {
-    api.getLinkTree.mockResolvedValue({ data: { link_tree: { id: 1, items: [{ id: 5 }] } } });
-    await store.fetchLinkTree(1);
-    expect(get(store.linkTree)).toEqual({ id: 1, items: [{ id: 5 }] });
-  });
-
-  it("fetchLinkTree memakai items di data bila tidak ada di link_tree", async () => {
-    api.getLinkTree.mockResolvedValue({ data: { link_tree: { id: 1 }, items: [{ id: 6 }] } });
-    await store.fetchLinkTree(1);
-    expect(get(store.linkTree).items).toEqual([{ id: 6 }]);
-  });
-
-  it("fetchLinkTree default ke array kosong", async () => {
-    api.getLinkTree.mockResolvedValue({ data: { link_tree: { id: 1 } } });
-    await store.fetchLinkTree(1);
+  it("loadLinkTree sukses (dengan dan tanpa items) dan gagal", async () => {
+    mockApi(listRoutes);
+    await store.loadLinkTree("t1");
+    expect(get(store.linkTree).items).toHaveLength(1);
+    const { items, ...noItems } = sampleTree;
+    mockApi({ "GET /link-trees/t1": okResponse({ link_tree: noItems }) });
+    await store.loadLinkTree("t1");
     expect(get(store.linkTree).items).toEqual([]);
-  });
-
-  it("fetchLinkTree gagal menyisakan detail kosong", async () => {
-    api.getLinkTree.mockRejectedValue(new Error("404"));
-    await store.fetchLinkTree(1);
+    mockApi({ "GET /link-trees/t1": failResponse() });
+    await store.loadLinkTree("t1");
     expect(get(store.linkTree)).toBeNull();
   });
-});
 
-describe("mutasi", () => {
-  const cases = [
-    ["createLinkTree", () => store.createLinkTree({ title: "T" }), api.addLinkTree, store.isAdded],
-    ["editLinkTree", () => store.editLinkTree(1, { title: "T" }), api.changeLinkTree, store.isChanged],
-    ["editCover", () => store.editCover(1, "file"), api.changeCover, store.isCoverChanged],
-    ["removeLinkTree", () => store.removeLinkTree(1), api.deleteLinkTree, store.isDeleted],
-    ["removeAllLinkTrees", () => store.removeAllLinkTrees(), api.deleteAllLinkTrees, store.isDeletedAll],
-    ["removeItem", () => store.removeItem(1, 2), api.deleteItem, store.isItemMutated],
-  ];
-
-  it.each(cases)("%s menaikkan bendera saat sukses", async (_name, run, apiFn, flag) => {
-    apiFn.mockResolvedValue({});
-    expect(await run()).toBe(true);
-    expect(get(flag)).toBe(true);
-    expect(Swal.fire).toHaveBeenCalledWith(expect.objectContaining({ icon: "success" }));
+  it("mutasi daftar menyalakan bendera dan memuat ulang", async () => {
+    mockApi({
+      ...listRoutes,
+      "POST /link-trees": okResponse(),
+      "DELETE /link-trees/t1": okResponse(),
+      "DELETE /link-trees": okResponse(),
+    });
+    await store.addLinkTree({});
+    await store.removeLinkTree("t1");
+    await store.removeAllLinkTrees();
+    expect(get(store.isAdded)).toBe(true);
+    expect(get(store.isDeleted)).toBe(true);
+    expect(get(store.isAllDeleted)).toBe(true);
+    expect(get(store.linkTrees)).toEqual([sampleTree]);
   });
 
-  it("mutasi gagal tidak menaikkan bendera", async () => {
-    api.addLinkTree.mockRejectedValue(new Error("invalid"));
-    expect(await store.createLinkTree({})).toBe(false);
+  it("mutasi detail dan item memuat ulang detail", async () => {
+    mockApi({
+      ...listRoutes,
+      "PUT /link-trees/t1": okResponse(),
+      "POST /link-trees/t1/cover": okResponse(),
+      "POST /link-trees/t1/items": okResponse(),
+      "PUT /link-trees/t1/items/i1": okResponse(),
+      "DELETE /link-trees/t1/items/i1": okResponse(),
+    });
+    await store.changeLinkTree("t1", {});
+    await store.changeCover("t1", new File(["x"], "c.png"));
+    await store.addItem("t1", {});
+    await store.changeItem("t1", "i1", {});
+    await store.removeItem("t1", "i1");
+    expect(get(store.isChanged)).toBe(true);
+    expect(get(store.isCoverChanged)).toBe(true);
+    expect(get(store.isItemChanged)).toBe(true);
+    expect(get(store.linkTree).id).toBe("t1");
+  });
+
+  it("mutasi gagal tidak menyalakan bendera; reset mengosongkan state", async () => {
+    mockApi({ "POST /link-trees": failResponse() });
+    await store.addLinkTree({});
     expect(get(store.isAdded)).toBe(false);
-    expect(Swal.fire).toHaveBeenCalledTimes(1);
-  });
-
-  it("saveItem menambah item baru bila item kosong", async () => {
-    api.addItem.mockResolvedValue({});
-    expect(await store.saveItem(1, null, { title: "A", url: "u" })).toBe(true);
-    expect(api.addItem).toHaveBeenCalledWith(1, { title: "A", url: "u" });
-    expect(get(store.isItemMutated)).toBe(true);
-  });
-
-  it("saveItem mengubah item yang ada", async () => {
-    api.changeItem.mockResolvedValue({});
-    expect(await store.saveItem(1, { id: 9 }, { title: "B", url: "u" })).toBe(true);
-    expect(api.changeItem).toHaveBeenCalledWith(1, 9, { title: "B", url: "u" });
-  });
-
-  it("resetFlags menurunkan semua bendera", () => {
-    [store.isAdded, store.isChanged, store.isCoverChanged, store.isDeleted, store.isDeletedAll, store.isItemMutated]
-      .forEach((flag) => flag.set(true));
-    store.resetFlags();
-    expect(get(store.isAdded) || get(store.isChanged) || get(store.isCoverChanged)
-      || get(store.isDeleted) || get(store.isDeletedAll) || get(store.isItemMutated)).toBe(false);
+    store.isAdded.set(true);
+    store.linkTree.set(sampleTree);
+    store.resetLinkTrees();
+    expect(get(store.isAdded)).toBe(false);
+    expect(get(store.linkTree)).toBeNull();
   });
 });

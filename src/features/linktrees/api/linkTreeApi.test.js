@@ -1,48 +1,34 @@
-import { describe, expect, it, vi } from "vitest";
-import { apiRequest } from "../../../helpers/apiHelper.js";
 import * as api from "./linkTreeApi.js";
-
-vi.mock("../../../helpers/apiHelper.js", () => ({ apiRequest: vi.fn() }));
-
-const payload = { title: "T", type: "public", description: "D" };
+import { mockApi, okResponse } from "../../../test-utils.js";
 
 describe("linkTreeApi", () => {
-  it("membaca daftar dan detail", () => {
-    api.getLinkTrees();
-    api.getLinkTree(3);
-    expect(apiRequest).toHaveBeenCalledWith("GET", "/link-trees", {});
-    expect(apiRequest).toHaveBeenCalledWith("GET", "/link-trees/3", {});
-  });
-
-  it("menambah dan mengubah link tree", () => {
-    api.addLinkTree(payload);
-    api.changeLinkTree(3, payload);
-    expect(apiRequest).toHaveBeenCalledWith("POST", "/link-trees", { json: payload });
-    expect(apiRequest).toHaveBeenCalledWith("PUT", "/link-trees/3", { json: payload });
-  });
-
-  it("mengubah cover dengan FormData", () => {
-    api.changeCover(3, new File(["x"], "c.png"));
-    const [method, path, options] = apiRequest.mock.calls.at(-1);
-    expect([method, path]).toEqual(["POST", "/link-trees/3/cover"]);
-    expect(options.form.get("cover")).toBeInstanceOf(File);
-  });
-
-  it("menghapus satu dan semua", () => {
-    api.deleteLinkTree(3);
-    api.deleteAllLinkTrees();
-    expect(apiRequest).toHaveBeenCalledWith("DELETE", "/link-trees/3", {});
-    expect(apiRequest).toHaveBeenCalledWith("DELETE", "/link-trees", {});
-  });
-
-  it("mengelola item", () => {
-    const item = { title: "GitHub", url: "https://github.com" };
-    const body = { title: "GitHub", label: "GitHub", url: "https://github.com" };
-    api.addItem(3, item);
-    api.changeItem(3, 9, item);
-    api.deleteItem(3, 9);
-    expect(apiRequest).toHaveBeenCalledWith("POST", "/link-trees/3/items", { json: body });
-    expect(apiRequest).toHaveBeenCalledWith("PUT", "/link-trees/3/items/9", { json: body });
-    expect(apiRequest).toHaveBeenCalledWith("DELETE", "/link-trees/3/items/9", {});
+  it("memanggil seluruh endpoint link tree", async () => {
+    const fetchMock = mockApi({
+      "POST /link-trees": okResponse(),
+      "POST /link-trees/1/cover": okResponse(),
+      "PUT /link-trees/1": okResponse(),
+      "GET /link-trees": okResponse(),
+      "GET /link-trees/1": okResponse(),
+      "DELETE /link-trees/1": okResponse(),
+      "DELETE /link-trees": okResponse(),
+      "POST /link-trees/1/items": okResponse(),
+      "PUT /link-trees/1/items/2": okResponse(),
+      "DELETE /link-trees/1/items/2": okResponse(),
+    });
+    await api.postLinkTree({ title: "a", type: "public", description: "b" });
+    await api.postCover("1", new File(["x"], "c.png"));
+    await api.putLinkTree("1", {});
+    await api.getLinkTrees();
+    await api.getLinkTree("1");
+    await api.deleteLinkTree("1");
+    await api.deleteAllLinkTrees();
+    await api.postItem("1", {});
+    await api.putItem("1", "2", {});
+    await api.deleteItem("1", "2");
+    const results = fetchMock.mock.results.length;
+    expect(results).toBe(10);
+    const statuses = await Promise.all(fetchMock.mock.results.map((r) => r.value.then((v) => v.json())));
+    expect(statuses.every((s) => s.status === "success")).toBe(true);
+    expect(fetchMock.mock.calls[1][1].body.get("cover")).toBeInstanceOf(File);
   });
 });

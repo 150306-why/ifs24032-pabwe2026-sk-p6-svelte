@@ -1,130 +1,91 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/svelte";
+import Swal from "sweetalert2";
 import { get } from "svelte/store";
-import { renderWithProviders } from "../../../test-utils.js";
-import * as store from "../states/linkTreesStore.js";
-import { profile } from "../../auth/states/authStore.js";
-import { showConfirmDialog } from "../../../helpers/toolsHelper.js";
-import { currentPath } from "../../../router.js";
+import { screen, fireEvent, waitFor } from "@testing-library/svelte";
 import HomePage from "./HomePage.svelte";
+import { currentPath } from "../../../router.js";
+import { renderWithProviders, mockApi, okResponse, sampleTree, sampleUser } from "../../../test-utils.js";
 
-vi.mock("../states/linkTreesStore.js", async () => {
-  const { writable } = await import("svelte/store");
-  return {
-    linkTrees: writable([]),
-    isAdded: writable(false),
-    isDeleted: writable(false),
-    isDeletedAll: writable(false),
-    fetchLinkTrees: vi.fn(),
-    removeLinkTree: vi.fn(),
-    removeAllLinkTrees: vi.fn(),
-    resetFlags: vi.fn(),
-    createLinkTree: vi.fn(),
-  };
-});
-vi.mock("../../auth/states/authStore.js", async () => {
-  const { writable } = await import("svelte/store");
-  return { profile: writable({ id: 1 }) };
-});
-vi.mock("../../../helpers/toolsHelper.js", () => ({ showConfirmDialog: vi.fn() }));
-
-const trees = [
-  { id: 1, user_id: 1, title: "Portofolio", type: "public", description: "d1", cover: "http://x/c.png" },
-  { id: 2, user_id: 2, title: "Kampus", type: "private", description: null, cover: null },
-  { id: 3, user_id: 1, title: "Rahasia", type: "unlisted", description: "x", cover: null },
-];
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  store.linkTrees.set(trees);
-  store.isAdded.set(false);
-  store.isDeleted.set(false);
-  store.isDeletedAll.set(false);
-  profile.set({ id: 1 });
+const other = { ...sampleTree, id: "t2", user_id: "u2", title: "Resep", type: "private", cover: "http://x/c.png" };
+const third = { ...sampleTree, id: "t3", user_id: "u2", title: "Musik", type: "unlisted" };
+const routes = () => ({
+  "GET /link-trees": okResponse({ link_trees: [sampleTree, other, third] }),
+  "DELETE /link-trees/t1": okResponse({}, "Dihapus"),
+  "DELETE /link-trees": okResponse({}, "Semua dihapus"),
+  "POST /link-trees": okResponse({}, "Dibuat"),
 });
 
 describe("HomePage", () => {
-  it("memuat data, menampilkan daftar dan statistik", () => {
-    renderWithProviders(HomePage);
-    expect(store.fetchLinkTrees).toHaveBeenCalled();
-    expect(screen.getByText("Portofolio")).toBeInTheDocument();
-    expect(screen.getByAltText("Portofolio")).toBeInTheDocument();
+  beforeEach(() => vi.clearAllMocks());
+
+  it("menampilkan daftar, cover/placeholder, dan statistik", async () => {
+    mockApi(routes());
+    renderWithProviders(HomePage, {}, { user: sampleUser });
+    await waitFor(() => expect(screen.getAllByTestId("card")).toHaveLength(3));
+    expect(screen.getByAltText("Resep")).toBeInTheDocument();
     expect(screen.getByTestId("stat-total")).toHaveTextContent("3");
     expect(screen.getByTestId("stat-public")).toHaveTextContent("1");
     expect(screen.getByTestId("stat-unlisted")).toHaveTextContent("1");
     expect(screen.getByTestId("stat-private")).toHaveTextContent("1");
-    expect(screen.getByTestId("stat-mine")).toHaveTextContent("2");
+    expect(screen.getByTestId("stat-mine")).toHaveTextContent("1");
   });
 
-  it("mencari berdasarkan judul", async () => {
+  it("pencarian dan filter milik saya", async () => {
+    mockApi(routes());
+    renderWithProviders(HomePage, {}, { user: sampleUser });
+    await waitFor(() => expect(screen.getAllByTestId("card")).toHaveLength(3));
+    await fireEvent.input(screen.getByLabelText("Cari"), { target: { value: "resep" } });
+    expect(screen.getAllByTestId("card")).toHaveLength(1);
+    await fireEvent.input(screen.getByLabelText("Cari"), { target: { value: "" } });
+    await fireEvent.click(screen.getByLabelText("Milik saya"));
+    expect(screen.getAllByTestId("card")).toHaveLength(1);
+    await fireEvent.input(screen.getByLabelText("Cari"), { target: { value: "zzz" } });
+    expect(screen.getByTestId("empty")).toBeInTheDocument();
+  });
+
+  it("tanpa profil, tidak ada yang dianggap milik saya", async () => {
+    mockApi(routes());
     renderWithProviders(HomePage);
-    await fireEvent.input(screen.getByPlaceholderText("Cari judul..."), { target: { value: "kamp" } });
-    expect(screen.getByText("Kampus")).toBeInTheDocument();
-    expect(screen.queryByText("Portofolio")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByTestId("card")).toHaveLength(3));
+    expect(screen.getByTestId("stat-mine")).toHaveTextContent("0");
   });
 
-  it("memfilter milik saya", async () => {
-    renderWithProviders(HomePage);
-    await fireEvent.click(screen.getByLabelText("Milik saya", { selector: 'input[type="checkbox"]' }));
-    expect(screen.queryByText("Kampus")).not.toBeInTheDocument();
-    expect(screen.getByText("Rahasia")).toBeInTheDocument();
+  it("judul menuju halaman detail", async () => {
+    mockApi(routes());
+    renderWithProviders(HomePage, {}, { user: sampleUser });
+    await waitFor(() => expect(screen.getByText("Portofolio")).toBeInTheDocument());
+    await fireEvent.click(screen.getByText("Portofolio"));
+    expect(get(currentPath)).toBe("/link-trees/t1");
   });
-
-  it("menampilkan keadaan kosong dan menonaktifkan hapus semua", () => {
-    store.linkTrees.set([]);
-    renderWithProviders(HomePage);
-    expect(screen.getByText("Belum ada link tree.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Hapus Semua" })).toBeDisabled();
-  });
-
-  it("menghapus satu link tree setelah konfirmasi", async () => {
-    showConfirmDialog.mockResolvedValue(true);
-    renderWithProviders(HomePage);
-    await fireEvent.click(screen.getByRole("button", { name: "Hapus Kampus" }));
-    await waitFor(() => expect(store.removeLinkTree).toHaveBeenCalledWith(2));
-  });
-
-  it("tidak menghapus bila konfirmasi dibatalkan", async () => {
-    showConfirmDialog.mockResolvedValue(false);
-    renderWithProviders(HomePage);
-    await fireEvent.click(screen.getByRole("button", { name: "Hapus Kampus" }));
-    await waitFor(() => expect(showConfirmDialog).toHaveBeenCalled());
-    expect(store.removeLinkTree).not.toHaveBeenCalled();
-  });
-
-  it("hapus semua dengan dan tanpa konfirmasi", async () => {
-    renderWithProviders(HomePage);
-    showConfirmDialog.mockResolvedValueOnce(true);
-    await fireEvent.click(screen.getByRole("button", { name: "Hapus Semua" }));
-    await waitFor(() => expect(store.removeAllLinkTrees).toHaveBeenCalled());
-    showConfirmDialog.mockResolvedValueOnce(false);
-    await fireEvent.click(screen.getByRole("button", { name: "Hapus Semua" }));
-    await waitFor(() => expect(showConfirmDialog).toHaveBeenCalledTimes(2));
-    expect(store.removeAllLinkTrees).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([["isAdded"], ["isDeleted"], ["isDeletedAll"]])(
-    "memuat ulang saat bendera %s naik",
-    async (flag) => {
-      renderWithProviders(HomePage);
-      store.fetchLinkTrees.mockClear();
-      store[flag].set(true);
-      await waitFor(() => expect(store.resetFlags).toHaveBeenCalled());
-      expect(store.fetchLinkTrees).toHaveBeenCalled();
-    }
-  );
 
   it("membuka dan menutup modal tambah", async () => {
+    mockApi(routes());
     renderWithProviders(HomePage);
-    await fireEvent.click(screen.getByRole("button", { name: /Tambah Link Tree/ }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("button", { name: "Batal" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await fireEvent.click(screen.getByText("Tambah"));
+    expect(screen.getByRole("dialog", { name: "Tambah Link Tree" })).toBeInTheDocument();
+    await fireEvent.click(screen.getByLabelText("Tutup"));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("tautan judul berpindah ke halaman detail", async () => {
+  it("hapus satu link tree (dibatalkan lalu dikonfirmasi)", async () => {
+    const fetchMock = mockApi(routes());
+    renderWithProviders(HomePage, {}, { user: sampleUser });
+    await waitFor(() => expect(screen.getAllByTestId("card")).toHaveLength(3));
+    Swal.fire.mockResolvedValueOnce({ isConfirmed: false });
+    await fireEvent.click(screen.getByLabelText("Hapus Portofolio"));
+    await waitFor(() => expect(Swal.fire).toHaveBeenCalled());
+    expect(fetchMock.mock.calls.some(([, o]) => o.method === "DELETE")).toBe(false);
+    await fireEvent.click(screen.getByLabelText("Hapus Portofolio"));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u, o]) => o.method === "DELETE" && u.endsWith("/t1"))).toBe(true));
+  });
+
+  it("hapus semua (dibatalkan lalu dikonfirmasi)", async () => {
+    const fetchMock = mockApi(routes());
     renderWithProviders(HomePage);
-    await fireEvent.click(screen.getByRole("link", { name: "Portofolio" }));
-    expect(get(currentPath)).toBe("/link-trees/1");
+    Swal.fire.mockResolvedValueOnce({ isConfirmed: false });
+    await fireEvent.click(screen.getByText("Hapus semua"));
+    await waitFor(() => expect(Swal.fire).toHaveBeenCalled());
+    expect(fetchMock.mock.calls.some(([, o]) => o.method === "DELETE")).toBe(false);
+    await fireEvent.click(screen.getByText("Hapus semua"));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u, o]) => o.method === "DELETE" && u.endsWith("/link-trees"))).toBe(true));
   });
 });

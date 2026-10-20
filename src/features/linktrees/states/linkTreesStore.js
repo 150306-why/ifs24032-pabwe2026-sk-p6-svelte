@@ -1,83 +1,60 @@
 import { writable } from "svelte/store";
 import * as api from "../api/linkTreeApi.js";
-import { attempt, showSuccessDialog } from "../../../helpers/toolsHelper.js";
+import { isSuccess } from "../../../helpers/apiHelper.js";
 
 export const linkTrees = writable([]);
 export const linkTree = writable(null);
-export const loading = writable(false);
-
 export const isAdded = writable(false);
 export const isChanged = writable(false);
 export const isCoverChanged = writable(false);
 export const isDeleted = writable(false);
-export const isDeletedAll = writable(false);
-export const isItemMutated = writable(false);
+export const isAllDeleted = writable(false);
+export const isItemChanged = writable(false);
 
-export function resetFlags() {
-  isAdded.set(false);
-  isChanged.set(false);
-  isCoverChanged.set(false);
-  isDeleted.set(false);
-  isDeletedAll.set(false);
-  isItemMutated.set(false);
+export async function loadLinkTrees() {
+  const res = await api.getLinkTrees();
+  linkTrees.set(isSuccess(res) ? res.data.link_trees : []);
+  return res;
 }
 
-async function mutate(action, flag, message) {
-  const ok = await attempt(action);
-  if (ok) {
+export async function loadLinkTree(id) {
+  const res = await api.getLinkTree(id);
+  linkTree.set(
+    isSuccess(res) ? { ...res.data.link_tree, items: res.data.link_tree.items || [] } : null
+  );
+  return res;
+}
+
+async function mutate(call, flag, reload) {
+  const res = await call();
+  if (isSuccess(res)) {
     flag.set(true);
-    await showSuccessDialog(message);
+    await reload();
   }
-  return ok;
+  return res;
 }
 
-export async function fetchLinkTrees() {
-  loading.set(true);
-  await attempt(async () => {
-    const result = await api.getLinkTrees();
-    linkTrees.set(result.data.link_trees);
-  });
-  loading.set(false);
-}
+export const addLinkTree = (data) => mutate(() => api.postLinkTree(data), isAdded, loadLinkTrees);
+export const changeLinkTree = (id, data) =>
+  mutate(() => api.putLinkTree(id, data), isChanged, () => loadLinkTree(id));
+export const changeCover = (id, file) =>
+  mutate(() => api.postCover(id, file), isCoverChanged, () => loadLinkTree(id));
+export const removeLinkTree = (id) =>
+  mutate(() => api.deleteLinkTree(id), isDeleted, loadLinkTrees);
+export const removeAllLinkTrees = () =>
+  mutate(() => api.deleteAllLinkTrees(), isAllDeleted, loadLinkTrees);
 
-export async function fetchLinkTree(id) {
-  loading.set(true);
+export const addItem = (id, data) =>
+  mutate(() => api.postItem(id, data), isItemChanged, () => loadLinkTree(id));
+export const changeItem = (id, itemId, data) =>
+  mutate(() => api.putItem(id, itemId, data), isItemChanged, () => loadLinkTree(id));
+export const removeItem = (id, itemId) =>
+  mutate(() => api.deleteItem(id, itemId), isItemChanged, () => loadLinkTree(id));
+
+export function resetLinkTrees() {
+  linkTrees.set([]);
   linkTree.set(null);
-  await attempt(async () => {
-    const result = await api.getLinkTree(id);
-    const detail = result.data.link_tree;
-    linkTree.set({ ...detail, items: detail.items ?? result.data.items ?? [] });
-  });
-  loading.set(false);
-}
-
-export function createLinkTree(payload) {
-  return mutate(() => api.addLinkTree(payload), isAdded, "Link tree berhasil ditambahkan");
-}
-
-export function editLinkTree(id, payload) {
-  return mutate(() => api.changeLinkTree(id, payload), isChanged, "Link tree berhasil diubah");
-}
-
-export function editCover(id, file) {
-  return mutate(() => api.changeCover(id, file), isCoverChanged, "Sampul berhasil diubah");
-}
-
-export function removeLinkTree(id) {
-  return mutate(() => api.deleteLinkTree(id), isDeleted, "Link tree berhasil dihapus");
-}
-
-export function removeAllLinkTrees() {
-  return mutate(() => api.deleteAllLinkTrees(), isDeletedAll, "Semua link tree berhasil dihapus");
-}
-
-export function saveItem(id, item, payload) {
-  if (item) {
-    return mutate(() => api.changeItem(id, item.id, payload), isItemMutated, "Item berhasil diubah");
-  }
-  return mutate(() => api.addItem(id, payload), isItemMutated, "Item berhasil ditambahkan");
-}
-
-export function removeItem(id, itemId) {
-  return mutate(() => api.deleteItem(id, itemId), isItemMutated, "Item berhasil dihapus");
+  [isAdded, isChanged, isCoverChanged, isDeleted, isAllDeleted, isItemChanged].forEach((flag) =>
+    flag.set(false)
+  );
 }

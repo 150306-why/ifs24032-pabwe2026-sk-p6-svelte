@@ -1,66 +1,62 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
-import Swal from "sweetalert2";
-import { getMe, getUsers, updatePassword, updatePhoto, updateProfile } from "../api/userApi.js";
-import { profile } from "../../auth/states/authStore.js";
-import { fetchUsers, savePassword, savePhoto, saveProfile, users } from "./usersStore.js";
-
-vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
-vi.mock("../api/userApi.js", () => ({
-  getMe: vi.fn(),
-  getUsers: vi.fn(),
-  updatePassword: vi.fn(),
-  updatePhoto: vi.fn(),
-  updateProfile: vi.fn(),
-}));
-vi.mock("../../auth/states/authStore.js", async () => {
-  const { writable } = await import("svelte/store");
-  return { profile: writable(null) };
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  users.set([]);
-  profile.set({ id: 1, name: "Lama", email: "l@x.c" });
-});
+import {
+  users, profile, isProfileUpdated, isPhotoUpdated, isPasswordChanged,
+  loadUsers, loadProfile, updateProfile, updatePhoto, changePassword, resetUsers,
+} from "./usersStore.js";
+import { mockApi, okResponse, failResponse, resetAllStores, sampleUser } from "../../../test-utils.js";
 
 describe("usersStore", () => {
-  it("fetchUsers mengisi daftar pengguna", async () => {
-    getUsers.mockResolvedValue({ data: { users: [{ id: 1 }] } });
-    await fetchUsers();
-    expect(get(users)).toEqual([{ id: 1 }]);
+  beforeEach(resetAllStores);
+
+  it("loadUsers sukses dan gagal", async () => {
+    mockApi({ "GET /users": okResponse({ users: [sampleUser] }) });
+    await loadUsers();
+    expect(get(users)).toEqual([sampleUser]);
+    mockApi({ "GET /users": failResponse() });
+    await loadUsers();
+    expect(get(users)).toEqual([]);
   });
 
-  it("fetchUsers menampilkan error saat gagal", async () => {
-    getUsers.mockRejectedValue(new Error("down"));
-    await fetchUsers();
-    expect(Swal.fire).toHaveBeenCalledWith(expect.objectContaining({ icon: "error", text: "down" }));
+  it("loadProfile sukses dan gagal", async () => {
+    mockApi({ "GET /users/me": okResponse({ user: sampleUser }) });
+    await loadProfile();
+    expect(get(profile)).toEqual(sampleUser);
+    mockApi({ "GET /users/me": failResponse() });
+    await loadProfile();
+    expect(get(profile)).toBeNull();
   });
 
-  it("saveProfile memperbarui profil", async () => {
-    updateProfile.mockResolvedValue({});
-    expect(await saveProfile("Baru", "b@x.c")).toBe(true);
-    expect(get(profile)).toEqual({ id: 1, name: "Baru", email: "b@x.c" });
-    expect(Swal.fire).toHaveBeenCalledWith(expect.objectContaining({ icon: "success" }));
+  it("updateProfile dan updatePhoto menyalakan bendera lalu memuat ulang profil", async () => {
+    mockApi({
+      "PUT /users/me": okResponse(),
+      "POST /users/photo": okResponse(),
+      "GET /users/me": okResponse({ user: sampleUser }),
+    });
+    await updateProfile({ name: "x" });
+    await updatePhoto(new File(["x"], "a.png"));
+    expect(get(isProfileUpdated)).toBe(true);
+    expect(get(isPhotoUpdated)).toBe(true);
+    expect(get(profile)).toEqual(sampleUser);
   });
 
-  it("saveProfile gagal tidak menampilkan dialog sukses", async () => {
-    updateProfile.mockRejectedValue(new Error("invalid"));
-    expect(await saveProfile("Baru", "b@x.c")).toBe(false);
-    expect(Swal.fire).toHaveBeenCalledTimes(1);
-    expect(Swal.fire).toHaveBeenCalledWith(expect.objectContaining({ icon: "error" }));
+  it("mutasi gagal tidak menyalakan bendera", async () => {
+    mockApi({ "PUT /users/me": failResponse() });
+    await updateProfile({});
+    expect(get(isProfileUpdated)).toBe(false);
   });
 
-  it("savePhoto memuat ulang profil", async () => {
-    updatePhoto.mockResolvedValue({});
-    getMe.mockResolvedValue({ data: { user: { id: 1, name: "Lama", photo: "p.png" } } });
-    expect(await savePhoto(new File(["x"], "p.png"))).toBe(true);
-    expect(get(profile).photo).toBe("p.png");
+  it("changePassword sukses dan gagal", async () => {
+    mockApi({ "PUT /users/change-password": failResponse() });
+    await changePassword({});
+    expect(get(isPasswordChanged)).toBe(false);
+    mockApi({ "PUT /users/change-password": okResponse() });
+    await changePassword({});
+    expect(get(isPasswordChanged)).toBe(true);
   });
 
-  it("savePassword memanggil API", async () => {
-    updatePassword.mockResolvedValue({});
-    expect(await savePassword("lama", "baru")).toBe(true);
-    expect(updatePassword).toHaveBeenCalledWith("lama", "baru");
+  it("resetUsers mengosongkan state", () => {
+    profile.set(sampleUser);
+    resetUsers();
+    expect(get(profile)).toBeNull();
   });
 });

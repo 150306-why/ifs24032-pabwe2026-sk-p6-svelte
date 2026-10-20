@@ -512,4 +512,4 @@ pipeline {
             echo "Result: ${currentBuild.currentResult}"
         }
     }
-}  
+}

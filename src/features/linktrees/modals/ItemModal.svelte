@@ -1,37 +1,38 @@
 <script>
+  import ModalShell from "../components/ModalShell.svelte";
   import { useInput } from "../../../hooks/useInput.js";
-  import { saveItem } from "../states/linkTreesStore.js";
+  import { addItem, changeItem } from "../states/linkTreesStore.js";
+  import { handleResult } from "../../../helpers/toolsHelper.js";
 
-  let { linkTreeId, item, onclose } = $props();
+  let { linkTreeId, item, onClose } = $props();
 
   const title = useInput(item ? item.title : "");
   const url = useInput(item ? item.url : "");
+  const titleValue = title.value;
+  const urlValue = url.value;
 
   async function submit(event) {
     event.preventDefault();
-    const ok = await saveItem(linkTreeId, item, { title: $title, url: $url });
-    if (ok) {
-      onclose();
-    }
+    const data = { title: $titleValue, url: $urlValue };
+    const res = item
+      ? await changeItem(linkTreeId, item.id, data)
+      : await addItem(linkTreeId, data);
+    await handleResult(res, onClose);
   }
 </script>
 
-<div class="fixed inset-0 z-30 grid place-items-center bg-black/40 p-4">
-  <div role="dialog" aria-modal="true" aria-labelledby="item-modal-title" class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-    <h2 id="item-modal-title" class="mb-4 text-lg font-semibold">{item ? "Ubah Item" : "Tambah Item"}</h2>
-    <form onsubmit={submit} class="space-y-3">
-      <div>
-        <label for="item-title" class="mb-1 block text-sm font-medium">Judul tautan</label>
-        <input id="item-title" type="text" required bind:value={$title} class="w-full rounded-lg border border-slate-300 px-3 py-2" />
-      </div>
-      <div>
-        <label for="item-url" class="mb-1 block text-sm font-medium">URL</label>
-        <input id="item-url" type="url" required bind:value={$url} class="w-full rounded-lg border border-slate-300 px-3 py-2" />
-      </div>
-      <div class="flex justify-end gap-2">
-        <button type="button" onclick={onclose} class="rounded-lg px-4 py-2 text-slate-600 hover:bg-slate-100">Batal</button>
-        <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white">Simpan</button>
-      </div>
-    </form>
-  </div>
-</div>
+<ModalShell title={item ? "Ubah Tautan" : "Tambah Tautan"} {onClose}>
+  <form onsubmit={submit} class="space-y-3" data-testid="item-form">
+    <div>
+      <label for="item-title" class="block text-sm font-medium mb-1">Judul tautan</label>
+      <input id="item-title" required value={$titleValue} oninput={title.onChange}
+        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    </div>
+    <div>
+      <label for="item-url" class="block text-sm font-medium mb-1">URL</label>
+      <input id="item-url" type="url" required value={$urlValue} oninput={url.onChange}
+        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    </div>
+    <button type="submit" class="w-full rounded-lg bg-indigo-600 text-white py-2 text-sm font-semibold">Simpan</button>
+  </form>
+</ModalShell>

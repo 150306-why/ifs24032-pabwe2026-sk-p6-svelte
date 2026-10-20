@@ -1,55 +1,22 @@
-import { apiRequest } from "../../../helpers/apiHelper.js";
+import { request } from "../../../helpers/apiHelper.js";
 
-export function getLinkTrees() {
-  return apiRequest("GET", "/link-trees", {});
-}
+const base = "/link-trees";
 
-export function getLinkTree(id) {
-  return apiRequest("GET", `/link-trees/${id}`, {});
-}
-
-export function addLinkTree({ title, type, description }) {
-  return apiRequest("POST", "/link-trees", {
-    json: { title, type, description },
-  });
-}
-
-export function changeLinkTree(id, { title, type, description }) {
-  return apiRequest("PUT", `/link-trees/${id}`, {
-    json: { title, type, description },
-  });
-}
-
-export function changeCover(id, file) {
+export const postLinkTree = (data) => request(base, { method: "POST", body: data });
+export const postCover = (id, file) => {
   const form = new FormData();
   form.append("cover", file);
-  return apiRequest("POST", `/link-trees/${id}/cover`, { form });
-}
+  return request(`${base}/${id}/cover`, { method: "POST", form });
+};
+export const putLinkTree = (id, data) => request(`${base}/${id}`, { method: "PUT", body: data });
+export const getLinkTrees = () => request(base);
+export const getLinkTree = (id) => request(`${base}/${id}`);
+export const deleteLinkTree = (id) => request(`${base}/${id}`, { method: "DELETE" });
+export const deleteAllLinkTrees = () => request(base, { method: "DELETE" });
 
-export function deleteLinkTree(id) {
-  return apiRequest("DELETE", `/link-trees/${id}`, {});
-}
-
-export function deleteAllLinkTrees() {
-  return apiRequest("DELETE", "/link-trees", {});
-}
-
-// Catatan: nama field item (title/url) mengikuti dokumentasi Delcom Link Tree.
-// Jika dokumentasi memakai nama lain, ubah hanya di fungsi ini.
-function itemBody({ title, url }) {
-  return { title, label: title, url };
-}
-
-export function addItem(id, item) {
-  return apiRequest("POST", `/link-trees/${id}/items`, { json: itemBody(item) });
-}
-
-export function changeItem(id, itemId, item) {
-  return apiRequest("PUT", `/link-trees/${id}/items/${itemId}`, {
-    json: itemBody(item),
-  });
-}
-
-export function deleteItem(id, itemId) {
-  return apiRequest("DELETE", `/link-trees/${id}/items/${itemId}`, {});
-}
+export const postItem = (id, data) =>
+  request(`${base}/${id}/items`, { method: "POST", body: data });
+export const putItem = (id, itemId, data) =>
+  request(`${base}/${id}/items/${itemId}`, { method: "PUT", body: data });
+export const deleteItem = (id, itemId) =>
+  request(`${base}/${id}/items/${itemId}`, { method: "DELETE" });

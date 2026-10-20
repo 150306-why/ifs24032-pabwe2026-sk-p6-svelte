@@ -1,43 +1,37 @@
-import { get, writable } from "svelte/store";
+import { writable } from "svelte/store";
+import * as api from "../api/authApi.js";
 import {
   getAccessToken,
   putAccessToken,
   removeAccessToken,
+  isSuccess,
 } from "../../../helpers/apiHelper.js";
-import { login, register } from "../api/authApi.js";
-import { getMe } from "../../users/api/userApi.js";
+import { loadProfile, resetUsers } from "../../users/states/usersStore.js";
 
-export const token = writable(getAccessToken());
-export const profile = writable(null);
-export const ready = writable(false);
+export const authToken = writable(getAccessToken());
+export const isAuthLogin = writable(false);
+export const isAuthRegister = writable(false);
+
+export async function login(email, password) {
+  const res = await api.postLogin({ email, password });
+  if (isSuccess(res)) {
+    putAccessToken(res.data.token);
+    authToken.set(res.data.token);
+    isAuthLogin.set(true);
+    await loadProfile();
+  }
+  return res;
+}
+
+export async function register(name, email, password) {
+  const res = await api.postRegister({ name, email, password });
+  if (isSuccess(res)) isAuthRegister.set(true);
+  return res;
+}
 
 export function logout() {
   removeAccessToken();
-  profile.set(null);
-  token.set(null);
-}
-
-export async function initAuth() {
-  if (get(token)) {
-    try {
-      const result = await getMe();
-      profile.set(result.data.user);
-    } catch {
-      logout();
-    }
-  }
-  ready.set(true);
-}
-
-export async function doLogin(email, password) {
-  const result = await login(email, password);
-  const newToken = result.data.token;
-  putAccessToken(newToken);
-  const me = await getMe();
-  profile.set(me.data.user);
-  token.set(newToken);
-}
-
-export async function doRegister(name, email, password) {
-  await register(name, email, password);
+  authToken.set(null);
+  isAuthLogin.set(false);
+  resetUsers();
 }

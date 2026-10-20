@@ -1,50 +1,50 @@
 <script>
+  import ModalShell from "../components/ModalShell.svelte";
   import { useInput } from "../../../hooks/useInput.js";
-  import { createLinkTree } from "../states/linkTreesStore.js";
+  import { addLinkTree } from "../states/linkTreesStore.js";
+  import { handleResult } from "../../../helpers/toolsHelper.js";
 
-  let { onclose } = $props();
+  let { onClose } = $props();
 
-  const title = useInput("");
+  const title = useInput();
   const type = useInput("public");
-  const description = useInput("");
+  const description = useInput();
+  const titleValue = title.value;
+  const typeValue = type.value;
+  const descriptionValue = description.value;
 
   async function submit(event) {
     event.preventDefault();
-    const ok = await createLinkTree({
-      title: $title,
-      type: $type,
-      description: $description,
+    const res = await addLinkTree({
+      title: $titleValue,
+      type: $typeValue,
+      description: $descriptionValue,
     });
-    if (ok) {
-      onclose();
-    }
+    await handleResult(res, onClose);
   }
 </script>
 
-<div class="fixed inset-0 z-30 grid place-items-center bg-black/40 p-4">
-  <div role="dialog" aria-modal="true" aria-labelledby="add-modal-title" class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-    <h2 id="add-modal-title" class="mb-4 text-lg font-semibold">Tambah Link Tree</h2>
-    <form onsubmit={submit} class="space-y-3">
-      <div>
-        <label for="add-title" class="mb-1 block text-sm font-medium">Judul</label>
-        <input id="add-title" type="text" required bind:value={$title} class="w-full rounded-lg border border-slate-300 px-3 py-2" />
-      </div>
-      <div>
-        <label for="add-type" class="mb-1 block text-sm font-medium">Tipe</label>
-        <select id="add-type" bind:value={$type} class="w-full rounded-lg border border-slate-300 px-3 py-2">
-          <option value="public">Public</option>
-          <option value="unlisted">Unlisted</option>
-          <option value="private">Private</option>
-        </select>
-      </div>
-      <div>
-        <label for="add-description" class="mb-1 block text-sm font-medium">Deskripsi</label>
-        <textarea id="add-description" required bind:value={$description} class="w-full rounded-lg border border-slate-300 px-3 py-2"></textarea>
-      </div>
-      <div class="flex justify-end gap-2">
-        <button type="button" onclick={onclose} class="rounded-lg px-4 py-2 text-slate-600 hover:bg-slate-100">Batal</button>
-        <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white">Simpan</button>
-      </div>
-    </form>
-  </div>
-</div>
+<ModalShell title="Tambah Link Tree" {onClose}>
+  <form onsubmit={submit} class="space-y-3" data-testid="add-form">
+    <div>
+      <label for="add-title" class="block text-sm font-medium mb-1">Judul</label>
+      <input id="add-title" required value={$titleValue} oninput={title.onChange}
+        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    </div>
+    <div>
+      <label for="add-type" class="block text-sm font-medium mb-1">Tipe</label>
+      <select id="add-type" bind:value={$typeValue}
+        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        <option value="public">Public</option>
+        <option value="unlisted">Unlisted</option>
+        <option value="private">Private</option>
+      </select>
+    </div>
+    <div>
+      <label for="add-description" class="block text-sm font-medium mb-1">Deskripsi</label>
+      <textarea id="add-description" rows="3" required value={$descriptionValue} oninput={description.onChange}
+        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
+    </div>
+    <button type="submit" class="w-full rounded-lg bg-indigo-600 text-white py-2 text-sm font-semibold">Simpan</button>
+  </form>
+</ModalShell>

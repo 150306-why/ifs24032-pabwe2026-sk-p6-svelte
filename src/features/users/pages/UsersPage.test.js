@@ -1,28 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/svelte";
-import { renderWithProviders } from "../../../test-utils.js";
-import { fetchUsers, users } from "../states/usersStore.js";
+import { screen, waitFor } from "@testing-library/svelte";
 import UsersPage from "./UsersPage.svelte";
-
-vi.mock("../states/usersStore.js", async () => {
-  const { writable } = await import("svelte/store");
-  return { users: writable([]), fetchUsers: vi.fn() };
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+import { renderWithProviders, mockApi, okResponse, sampleUser } from "../../../test-utils.js";
 
 describe("UsersPage", () => {
-  it("memuat dan menampilkan pengguna dengan atau tanpa foto", () => {
-    users.set([
-      { id: 1, name: "Budi", email: "b@x.c", photo: "http://x/p.png" },
-      { id: 2, name: "sari", email: "s@x.c", photo: null },
-    ]);
+  it("menampilkan keadaan kosong", () => {
+    mockApi({ "GET /users": okResponse({ users: [] }) });
     renderWithProviders(UsersPage);
-    expect(fetchUsers).toHaveBeenCalled();
-    expect(screen.getByAltText("Budi")).toBeInTheDocument();
-    expect(screen.getByText("s@x.c")).toBeInTheDocument();
-    expect(screen.getByText("S")).toBeInTheDocument();
+    expect(screen.getByTestId("users-empty")).toBeInTheDocument();
+  });
+
+  it("menampilkan daftar pengguna", async () => {
+    mockApi({ "GET /users": okResponse({ users: [sampleUser] }) });
+    renderWithProviders(UsersPage);
+    await waitFor(() => expect(screen.getByText("dian@example.com")).toBeInTheDocument());
+    expect(screen.getByText("D")).toBeInTheDocument();
   });
 });

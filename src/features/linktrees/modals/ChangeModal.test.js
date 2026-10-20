@@ -1,47 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/svelte";
-import { renderWithProviders } from "../../../test-utils.js";
-import { editLinkTree } from "../states/linkTreesStore.js";
+import { screen, fireEvent, waitFor } from "@testing-library/svelte";
 import ChangeModal from "./ChangeModal.svelte";
-
-vi.mock("../states/linkTreesStore.js", () => ({ editLinkTree: vi.fn() }));
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+import { renderWithProviders, mockApi, okResponse, sampleTree } from "../../../test-utils.js";
 
 describe("ChangeModal", () => {
-  it("menyimpan data awal dengan deskripsi kosong lalu menutup", async () => {
-    editLinkTree.mockResolvedValue(true);
-    const onclose = vi.fn();
-    const { container } = renderWithProviders(ChangeModal, {
-      linkTree: { id: 5, title: "A", type: "public", description: null },
-      onclose,
+  it("terisi data lama dan menyimpan perubahan", async () => {
+    const onClose = vi.fn();
+    const fetchMock = mockApi({
+      "PUT /link-trees/t1": okResponse({}, "Diubah"),
+      "GET /link-trees/t1": okResponse({ link_tree: sampleTree }),
     });
-    await fireEvent.submit(container.querySelector("form"));
-    await waitFor(() => expect(onclose).toHaveBeenCalled());
-    expect(editLinkTree).toHaveBeenCalledWith(5, { title: "A", type: "public", description: "" });
-  });
-
-  it("mengirim perubahan dan tetap terbuka saat gagal", async () => {
-    editLinkTree.mockResolvedValue(false);
-    const onclose = vi.fn();
-    const { container } = renderWithProviders(ChangeModal, {
-      linkTree: { id: 5, title: "A", type: "public", description: "lama" },
-      onclose,
-    });
-    await fireEvent.input(screen.getByLabelText("Judul"), { target: { value: "B" } });
+    renderWithProviders(ChangeModal, { linkTree: sampleTree, onClose });
+    expect(screen.getByLabelText("Judul")).toHaveValue("Portofolio");
+    expect(screen.getByLabelText("Tipe")).toHaveValue("public");
+    await fireEvent.input(screen.getByLabelText("Judul"), { target: { value: "Baru" } });
     await fireEvent.change(screen.getByLabelText("Tipe"), { target: { value: "unlisted" } });
-    await fireEvent.input(screen.getByLabelText("Deskripsi"), { target: { value: "baru" } });
-    await fireEvent.submit(container.querySelector("form"));
-    await waitFor(() => expect(editLinkTree).toHaveBeenCalledWith(5, { title: "B", type: "unlisted", description: "baru" }));
-    expect(onclose).not.toHaveBeenCalled();
-  });
-
-  it("tombol batal menutup modal", async () => {
-    const onclose = vi.fn();
-    renderWithProviders(ChangeModal, { linkTree: { id: 5, title: "A", type: "public", description: "d" }, onclose });
-    await fireEvent.click(screen.getByRole("button", { name: "Batal" }));
-    expect(onclose).toHaveBeenCalled();
+    await fireEvent.input(screen.getByLabelText("Deskripsi"), { target: { value: "D" } });
+    await fireEvent.submit(screen.getByTestId("change-form"));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ title: "Baru", type: "unlisted", description: "D" });
   });
 });

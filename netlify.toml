@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  VITE_DELCOM_BASEURL = "https://open-api.delcom.org/api/v1"
+
+# SPA fallback: router memakai History API, jadi semua path (mis. /auth/login)
+# harus dilayani oleh index.html agar tidak 404 saat dibuka langsung / di-refresh.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
